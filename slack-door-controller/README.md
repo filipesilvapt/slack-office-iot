@@ -1,7 +1,6 @@
 # Slack Door Controller
 
-Authentication is guaranteed by adding only the authorized members to the required Slack channel.
-Using some text commands in that channel it's possible to:
+Control a door using custom text commands that provide the following functionalities:
 - Open a door
 - See the door state (open or closed)
 - Detect when the door is opened or closed (through the sensor)
