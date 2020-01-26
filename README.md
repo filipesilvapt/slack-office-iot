@@ -1,5 +1,5 @@
 # Slack Office IOT
-Provides secure access control to your office, within a communication platform that you are already using.
+Provides secure access control to your office, within a communication platform (Slack) that you are already using.
 
 # License
 
