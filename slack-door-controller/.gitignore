@@ -1,0 +1,7 @@
+# Ignore the actual config files which might contain sensitive info
+BoardConfigs.h
+ControllerConfigs.h
+
+# Ignore extra files
+/TestingGrounds
+/ControllerConfigs
