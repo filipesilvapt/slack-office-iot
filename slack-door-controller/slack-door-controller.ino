@@ -110,7 +110,7 @@ void sendReedSwitchTriggerMessage() {
 
   // Check the contact state of the contact sensor
   String message = ":footprints: *" CONTROLLER_NAME ":*";
-  if (reedSwitchState == LOW) {
+  if (reedSwitchState == HIGH) {
     message += " Closed manually";
   } else {
     message += " Openned manually";
@@ -134,7 +134,7 @@ void sendReedSwitchState() {
 
   // If it's connected, get its contact state
   message = ":information_source: *" CONTROLLER_NAME ":* Is";
-  if (reedSwitchState == LOW) {
+  if (reedSwitchState == HIGH) {
     message += " CLOSED";
   } else {
     message += " OPEN";
@@ -189,89 +189,6 @@ void sendHelloMessage() {
   message += getNetworkInformation();
 
   sendWebSocketMessage(message);
-}
-
-/*
-   Experimental.
-   Messages with blocks can't be sent through a socket connection to slack.
-*/
-String getHelloMessageInBlocks() {
-  // Start creating the json for the request
-  DynamicJsonDocument messageBuffer(1024);
-  messageBuffer["channel"] = SLACK_CHANNEL_ID;
-  messageBuffer["as_user"] = true;
-
-  // Create the blocks array
-  DynamicJsonDocument blocksBuffer(1024);
-
-  // Create the "connected message" section
-  DynamicJsonDocument connectedBuffer(1024);
-  connectedBuffer["type"] = "section";
-
-  // Create the "connected message" section text
-  DynamicJsonDocument connectedTextBuffer(1024);
-  connectedTextBuffer["type"] = "mrkdwn";
-  connectedTextBuffer["text"] = ":heavy_check_mark: *" CONTROLLER_NAME ":* Connected";
-  connectedBuffer["text"] = connectedTextBuffer;
-
-  // Add the "connected message" section to the blocks
-  blocksBuffer.add(connectedBuffer);
-
-  // Create a divider section
-  DynamicJsonDocument dividerdBuffer(1024);
-  dividerdBuffer["type"] = "divider";
-  blocksBuffer.add(dividerdBuffer);
-
-  // Create the "network info" section
-  DynamicJsonDocument networkInfoBuffer(1024);
-  networkInfoBuffer["type"] = "section";
-
-  // Create the "network info" section fields
-  DynamicJsonDocument networkInfoFieldsBuffer(1024);
-
-  DynamicJsonDocument wifiFieldBuffer(1024);
-  wifiFieldBuffer["type"] = "mrkdwn";
-  wifiFieldBuffer["text"] = "*Wi-Fi*\n_" + WiFi.SSID() + "_";
-  networkInfoFieldsBuffer.add(wifiFieldBuffer);
-
-  DynamicJsonDocument strengthFieldBuffer(1024);
-  strengthFieldBuffer["type"] = "mrkdwn";
-  strengthFieldBuffer["text"] = "*Strength*\n_" "▰▰▰▰" "_";
-  networkInfoFieldsBuffer.add(strengthFieldBuffer);
-
-  DynamicJsonDocument ipFieldBuffer(1024);
-  ipFieldBuffer["type"] = "mrkdwn";
-  ipFieldBuffer["text"] = "*IP*\n_" + WiFi.localIP().toString() + "_";
-  networkInfoFieldsBuffer.add(ipFieldBuffer);
-
-  DynamicJsonDocument macFieldBuffer(1024);
-  macFieldBuffer["type"] = "mrkdwn";
-  macFieldBuffer["text"] = "*MAC*\n_" + WiFi.macAddress() + "_";
-  networkInfoFieldsBuffer.add(macFieldBuffer);
-
-  // Add the fields to the "network info" section
-  networkInfoBuffer["fields"] = networkInfoFieldsBuffer;
-
-  // Add the "network info" section to the blocks
-  blocksBuffer.add(networkInfoBuffer);
-
-  // Add the blocks to the main message
-  messageBuffer["blocks"] = blocksBuffer;
-
-
-  // If a contact sensor is available, add its information
-  /*if (isReedSwitchConnected) {
-    if (reedSwitchState == LOW) {
-      message += " (State: CLOSED)";
-    } else {
-      message += " (State: OPEN)";
-    }
-    }*/
-
-  // Convert the json object to a string
-  String messageJson;
-  serializeJson(messageBuffer, messageJson);
-  return messageJson;
 }
 
 /*
@@ -440,8 +357,8 @@ void setup() {
 
   pinMode(PING_LED_PIN, OUTPUT);
   pinMode(RELAY_PIN, OUTPUT);
-  pinMode(REED_SWITCH_PIN, INPUT);
-  pinMode(REED_SWITCH_CLOSED_PIN, INPUT);
+  pinMode(REED_SWITCH_STATE_PIN, INPUT);
+  pinMode(REED_SWITCH_CONNECTED_PIN, INPUT);
 
   // This particular relay needs be set HIGH so that it's not activated at boot time
   //digitalWrite(RELAY_PIN, HIGH);
@@ -474,11 +391,12 @@ void loop() {
     lastHeapMsg = millis();
   }
 
-  int reedSwitchClosedPinState = digitalRead(REED_SWITCH_CLOSED_PIN);
+  // Get the connectivity state of the reed switch
+  int reedSwitchConnectedState = digitalRead(REED_SWITCH_CONNECTED_PIN);
 
-  // Check if the reed switch connector is inserted in the port
-  if (reedSwitchClosedPinState == LOW) {
-    //Serial.printf("LOW %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchClosedPinState);
+  // Check if the reed switch is connected to the controller
+  if (reedSwitchConnectedState == HIGH) {
+    //Serial.printf("HIGH %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchClosedPinState);
     // Check if the connection changed (previously disconnected)
     if (!isFirstRun && !isReedSwitchConnected) {
       isReedConnectionChanged = true;
@@ -487,7 +405,7 @@ void loop() {
     }
 
     // Get the reed switch state if it's connected
-    reedSwitchState = digitalRead(REED_SWITCH_PIN);
+    reedSwitchState = digitalRead(REED_SWITCH_STATE_PIN);
 
     isReedSwitchConnected = true;
   } else {
@@ -550,19 +468,19 @@ void loop() {
 
     // Evaluate reed state changes
     if (isReedSwitchConnected) {
-      if (reedSwitchState == HIGH && !isReedHigh) {
+      if (reedSwitchState == LOW && !isReedLow) {
         // If the switch is open and it's the first time after it openned
-        isReedHigh = true;
-        isReedLow = false;
+        isReedLow = true;
+        isReedHigh = false;
 
         // Send trigger message if not the first run or after a recent reed connection
         if (!isFirstRun && !isReedSwitchConnectedRecently) {
           isReedTriggerSent = false;
         }
-      } else if (reedSwitchState == LOW && !isReedLow) {
+      } else if (reedSwitchState == HIGH && !isReedHigh) {
         // If the switch is closed and it's the first time after it closed
-        isReedHigh = false;
-        isReedLow = true;
+        isReedLow = false;
+        isReedHigh = true;
 
         // Send trigger message if not the first run or after a recent reed connection
         if (!isFirstRun && !isReedSwitchConnectedRecently) {

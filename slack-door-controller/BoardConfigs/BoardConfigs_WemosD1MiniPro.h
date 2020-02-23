@@ -19,7 +19,7 @@
 
 #define PING_LED_PIN                D4
 #define RELAY_PIN                   D1
-#define REED_SWITCH_PIN             D2
-#define REED_SWITCH_CLOSED_PIN      D5
+#define REED_SWITCH_STATE_PIN       D2
+#define REED_SWITCH_CONNECTED_PIN   D5
 
 #endif
