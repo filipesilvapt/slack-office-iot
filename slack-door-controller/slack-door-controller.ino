@@ -127,7 +127,11 @@ void sendReedSwitchState() {
 
   // Check the connection state of the contact sensor
   if (!isReedSwitchConnected) {
-    message = ":heavy_exclamation_mark: *" CONTROLLER_NAME ":* Door sensor not found!\nPlease check if it is connected.";
+    if (SUPPORTS_REED_SWITCH) {
+      message = ":heavy_exclamation_mark: *" CONTROLLER_NAME ":* Door sensor not found!\nPlease check if it is connected.";
+    } else {
+      message = ":information_source: *" CONTROLLER_NAME ":* Door sensor not supported by this controller.";
+    }
     sendWebSocketMessage(message);
     return;
   }
@@ -177,7 +181,7 @@ void sendHelloMessage() {
 
   // If a contact sensor is available, add its information
   if (isReedSwitchConnected) {
-    if (reedSwitchState == LOW) {
+    if (reedSwitchState == HIGH) {
       message += " (State: CLOSED)";
     } else {
       message += " (State: OPEN)";
@@ -360,9 +364,6 @@ void setup() {
   pinMode(REED_SWITCH_STATE_PIN, INPUT);
   pinMode(REED_SWITCH_CONNECTED_PIN, INPUT);
 
-  // This particular relay needs be set HIGH so that it's not activated at boot time
-  //digitalWrite(RELAY_PIN, HIGH);
-
   delay(500);
   Serial.println();
 
@@ -391,34 +392,7 @@ void loop() {
     lastHeapMsg = millis();
   }
 
-  // Get the connectivity state of the reed switch
-  int reedSwitchConnectedState = digitalRead(REED_SWITCH_CONNECTED_PIN);
-
-  // Check if the reed switch is connected to the controller
-  if (reedSwitchConnectedState == HIGH) {
-    //Serial.printf("HIGH %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchClosedPinState);
-    // Check if the connection changed (previously disconnected)
-    if (!isFirstRun && !isReedSwitchConnected) {
-      isReedConnectionChanged = true;
-      isReedSwitchConnectedRecently = true;
-      Serial.println("changed to connected");
-    }
-
-    // Get the reed switch state if it's connected
-    reedSwitchState = digitalRead(REED_SWITCH_STATE_PIN);
-
-    isReedSwitchConnected = true;
-  } else {
-    //Serial.printf("HIGH %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchClosedPinState);
-    // Check if the connection changed (previously connected)
-    if (!isFirstRun && isReedSwitchConnected) {
-      isReedConnectionChanged = true;
-      isReedSwitchConnectedRecently = false;
-      Serial.println("changed to disconnected");
-    }
-
-    isReedSwitchConnected = false;
-  }
+  getReedSwitchState();
 
   // Try to connect if not connected or reconnect if enough time has passed since last attempt
   if (!isConnectedToSlack &&
@@ -432,84 +406,59 @@ void loop() {
   }
 
   if (isConnectedToSlack) {
-
     if (isFirstRun) {
       sendHelloMessage();
     }
 
-    // Process any waiting message
-    while (!queue.isEmpty ()) {
-      currentMsg = queue.pop();
-      switch (currentMsg.type) {
-        case 'S': // success
-          sendSuccessMessage();
+    processMessagesInQueue();
 
-          lastPing = millis();
-          break;
+    evaluateReedSwitchStates();
 
-        case 'F': // fail
-          break;
-
-        case 'R': // current state of the reed switch
-          sendReedSwitchState();
-          break;
-
-        case 'P': // current network information
-          sendNetworkInformation();
-          break;
-      }
-    }
-
-    // Inform about the connectivity of the reed sensor
-    if (!isFirstRun && isReedConnectionChanged) {
-      isReedConnectionChanged = false;
-      sendReedConnectionChangedMessage();
-    }
-
-    // Evaluate reed state changes
-    if (isReedSwitchConnected) {
-      if (reedSwitchState == LOW && !isReedLow) {
-        // If the switch is open and it's the first time after it openned
-        isReedLow = true;
-        isReedHigh = false;
-
-        // Send trigger message if not the first run or after a recent reed connection
-        if (!isFirstRun && !isReedSwitchConnectedRecently) {
-          isReedTriggerSent = false;
-        }
-      } else if (reedSwitchState == HIGH && !isReedHigh) {
-        // If the switch is closed and it's the first time after it closed
-        isReedLow = false;
-        isReedHigh = true;
-
-        // Send trigger message if not the first run or after a recent reed connection
-        if (!isFirstRun && !isReedSwitchConnectedRecently) {
-          isReedTriggerSent = false;
-        }
-      }
-
-      // Now that we have ignored any possible alteration after a recent reed connection, clear the flag
-      isReedSwitchConnectedRecently = false;
-
-      // Only trigger the message of the reed state if it's not the first run as we already send the state in the hello
-      if (!isFirstRun && !isReedTriggerSent) {
-        isReedTriggerSent = true;
-        sendReedSwitchTriggerMessage();
-      }
-    }
-
-    // Send ping every X seconds, to keep the connection alive
-    if (millis() - lastPing > SLACK_PING_DELAY) {
-      digitalWrite(PING_LED_PIN, LOW);
-
-      sendPing();
-
-      lastPing = millis();
-    } else {
-      digitalWrite(PING_LED_PIN, HIGH);
-    }
+    keepConnectionAlive();
 
     isFirstRun = false;
+  }
+}
+
+/*
+   Send ping every X seconds, to keep the connection alive
+*/
+void keepConnectionAlive() {
+  if (millis() - lastPing > SLACK_PING_DELAY) {
+    digitalWrite(PING_LED_PIN, LOW);
+
+    sendPing();
+
+    lastPing = millis();
+  } else {
+    digitalWrite(PING_LED_PIN, HIGH);
+  }
+}
+
+/*
+   Process any waiting message
+*/
+void processMessagesInQueue() {
+  while (!queue.isEmpty ()) {
+    currentMsg = queue.pop();
+    switch (currentMsg.type) {
+      case 'S': // success
+        sendSuccessMessage();
+
+        lastPing = millis();
+        break;
+
+      case 'F': // fail
+        break;
+
+      case 'R': // current state of the reed switch
+        sendReedSwitchState();
+        break;
+
+      case 'P': // current network information
+        sendNetworkInformation();
+        break;
+    }
   }
 }
 
@@ -619,4 +568,98 @@ String getNetworkInformation() {
   information += "_";
 
   return information;
+}
+
+/*
+   Check if the reed switch is connected and if so, read its state (open or closed)
+*/
+void getReedSwitchState() {
+  // Return immediately if it doesn't support a reed switch
+  if (!SUPPORTS_REED_SWITCH) {
+    return;
+  }
+
+  // Get the connectivity state of the reed switch
+  int reedSwitchConnectedState = digitalRead(REED_SWITCH_CONNECTED_PIN);
+
+  // Check if the reed switch is connected to the controller
+  if (reedSwitchConnectedState == HIGH) {
+    Serial.printf("HIGH %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchConnectedState);
+    // Check if the connection changed (previously disconnected)
+    if (!isFirstRun && !isReedSwitchConnected) {
+      isReedConnectionChanged = true;
+      isReedSwitchConnectedRecently = true;
+      Serial.println("changed to connected");
+    }
+
+    // Get the reed switch state if it's connected
+    reedSwitchState = digitalRead(REED_SWITCH_STATE_PIN);
+
+    isReedSwitchConnected = true;
+  } else {
+    //Serial.printf("HIGH %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchClosedPinState);
+    // Check if the connection changed (previously connected)
+    if (!isFirstRun && isReedSwitchConnected) {
+      isReedConnectionChanged = true;
+      isReedSwitchConnectedRecently = false;
+      Serial.println("changed to disconnected");
+    }
+
+    isReedSwitchConnected = false;
+  }
+}
+
+void evaluateReedSwitchStates() {
+  if (SUPPORTS_REED_SWITCH) {
+    evaluateReedSwitchConnectivityStateToInform();
+
+    evaluateReedSwitchStateToInform();
+  }
+}
+
+/*
+   Evaluate the connectivity state of the reed sensor and send a message if it has changed
+*/
+void evaluateReedSwitchConnectivityStateToInform() {
+  // Ignore the first run
+  if (!isFirstRun && isReedConnectionChanged) {
+    isReedConnectionChanged = false;
+    sendReedConnectionChangedMessage();
+  }
+}
+
+/*
+  Evaluate the reed switch state and send a message if it has changed
+*/
+void evaluateReedSwitchStateToInform() {
+  if (isReedSwitchConnected) {
+    if (reedSwitchState == HIGH && !isReedHigh) {
+      // If the switch is closed and it's the first time after it closed
+      isReedLow = false;
+      isReedHigh = true;
+
+      // Send trigger message if not the first run or after a recent reed connection
+      if (!isFirstRun && !isReedSwitchConnectedRecently) {
+        isReedTriggerSent = false;
+      }
+    } else if (reedSwitchState == LOW && !isReedLow) {
+      // If the switch is open and it's the first time after it openned
+      isReedLow = true;
+      isReedHigh = false;
+
+      // Send trigger message if not the first run or after a recent reed connection
+      if (!isFirstRun && !isReedSwitchConnectedRecently) {
+        isReedTriggerSent = false;
+      }
+    }
+
+    // Now that we have ignored any possible alteration after a recent reed connection, clear the flag
+    isReedSwitchConnectedRecently = false;
+
+    // Only trigger the message of the reed state if it's not the first run as we already send the state in the hello
+    if (!isFirstRun && !isReedTriggerSent) {
+      isReedTriggerSent = true;
+      sendReedSwitchTriggerMessage();
+    }
+  }
 }
