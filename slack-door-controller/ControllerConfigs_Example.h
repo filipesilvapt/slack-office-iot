@@ -23,4 +23,7 @@
 #define WIFI_SSID        ""
 #define WIFI_PASSWORD    ""
 
+// Extra features
+#define SUPPORTS_REED_SWITCH    false
+
 #endif
