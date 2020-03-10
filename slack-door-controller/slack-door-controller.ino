@@ -584,7 +584,7 @@ void getReedSwitchState() {
 
   // Check if the reed switch is connected to the controller
   if (reedSwitchConnectedState == HIGH) {
-    Serial.printf("HIGH %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchConnectedState);
+    //Serial.printf("HIGH %d %d %d\n", isFirstRun, isReedSwitchConnected, reedSwitchConnectedState);
     // Check if the connection changed (previously disconnected)
     if (!isFirstRun && !isReedSwitchConnected) {
       isReedConnectionChanged = true;
