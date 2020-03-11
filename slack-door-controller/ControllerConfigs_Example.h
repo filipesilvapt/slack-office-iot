@@ -1,7 +1,8 @@
 #ifndef CONTROLLER_CONFIGS_H
 #define CONTROLLER_CONFIGS_H
 
-// If Slack changes their SSL fingerprint, this needs to be updated
+// Slack SSL fingerprint (Get 'slack.com' fingerprint from https://www.grc.com/fingerprints.htm)
+// Valid from 02/08/18 to 02/12/21
 #define SLACK_SSL_FINGERPRINT "C1 0D 53 49 D2 3E E5 2B A2 61 D5 9E 6F 99 0D 3D FD 8B B2 B3"
 
 // Get token by creating new bot integration at https://my.slack.com/services/new/bot

@@ -8,7 +8,7 @@
   #---
 */
 
-/**
+/*
    Arduino IDE v1.8.9
 */
 #include <Arduino.h>
@@ -24,6 +24,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266HTTPClient.h>
+#include <WiFiClientSecureBearSSL.h>
 
 /*
    WebSockets by Markus Sattler v2.1.4
@@ -332,20 +333,32 @@ void connectToSlack() {
 
   // Step 1: Find WebSocket address via RTM API (https://api.slack.com/methods/rtm.connect)
   // This is a Web API Tier 1 with a limit of 1+ per minute
-  HTTPClient http;
-  http.begin("https://slack.com/api/rtm.connect?token=" SLACK_BOT_TOKEN, SLACK_SSL_FINGERPRINT);
-  int httpCode = http.GET();
+  std::unique_ptr<BearSSL::WiFiClientSecure>client(new BearSSL::WiFiClientSecure);
+  client->setFingerprint(SLACK_SSL_FINGERPRINT);
 
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("HTTP GET failed with code %d and message: %s\n", httpCode, http.errorToString(httpCode).c_str());
+  // Create the connection using a secure client (TLS 1.2)
+  HTTPClient https;
+  if (!https.begin(*client, "https://slack.com/api/rtm.connect?token=" SLACK_BOT_TOKEN)) {
+    Serial.println("Unable to connect to RTM API");
     return;
   }
 
-  WiFiClient *client = http.getStreamPtr();
-  client->find("wss:\\/\\/");
-  String host = client->readStringUntil('\\');
-  String path = client->readStringUntil('"');
+  // Evaluate the status code
+  int httpCode = https.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("HTTP GET failed with code %d and message: %s\n", httpCode, https.errorToString(httpCode).c_str());
+    return;
+  }
+
+  // Find the host and path from the stream
+  WiFiClient *clientStream = https.getStreamPtr();
+  clientStream->find("wss:\\/\\/");
+  String host = clientStream->readStringUntil('\\');
+  String path = clientStream->readStringUntil('"');
   path.replace("\\/", "/");
+
+  // Close the connection
+  https.end();
 
   // Step 2: Open WebSocket connection and register event handler
   Serial.println("WebSocket Host= " + host + " Path= " + path);
@@ -479,40 +492,6 @@ void sendWebSocketMessage(String message) {
   serializeJson(messageBuffer, messageJson);
   Serial.printf("JSON to send-> %s\n", messageJson.c_str());
   webSocket.sendTXT(messageJson);
-}
-
-/*
-   Experimental.
-   Post a json message to the slack channel using the web api.
-*/
-void sendWebApiMessage() {
-  //std::unique_ptr<BearSSL::WiFiClientSecure>client(new BearSSL::WiFiClientSecure);
-
-  //client->setFingerprint(SLACK_SSL_FINGERPRINT);
-
-  HTTPClient https;
-
-  Serial.println("[HTTPS] begin...");
-  if (https.begin("https://slack.com/api/chat.postMessage", SLACK_SSL_FINGERPRINT)) {
-    Serial.println("[HTTPS] headers...");
-
-    https.addHeader("Content-Type", "application/json");
-    https.addHeader("Authorization", "Bearer " SLACK_BOT_TOKEN);
-
-    Serial.println("[HTTPS] post...");
-    int httpCode = https.POST("{ \"channel\": \"G9APARESY\",\"as_user\": true,\"text\": \"asdas\"}");
-    //int httpCode = https.POST(messageJson);
-    //String payload = https.getString();
-
-    Serial.println("[HTTPS] code...");
-
-    Serial.println(httpCode);
-    //Serial.println(payload);
-
-    https.end();
-  } else {
-    Serial.printf("[HTTPS] Unable to connect\n");
-  }
 }
 
 /*
