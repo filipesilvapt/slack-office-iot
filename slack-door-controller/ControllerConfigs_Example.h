@@ -11,6 +11,9 @@
 // The channel identifier (i.e. GP6F6369C)
 #define SLACK_CHANNEL_ID ""
 
+// The name that will appear in the network (router) to ease the identification (Rules: https://www.ietf.org/rfc/rfc1178.txt)
+#define NETWORK_HOSTNAME ""
+
 // The name that will be used in every message sent by the controller
 #define CONTROLLER_NAME  ""
 
