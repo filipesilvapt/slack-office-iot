@@ -380,7 +380,13 @@ void setup() {
   delay(500);
   Serial.println();
 
+  // Set WiFi mode to Station in order to connect to a network
   WiFi.mode(WIFI_STA);
+
+  // Set the visible network name (instead of the default ESP_XXXX)
+  WiFi.hostname(NETWORK_HOSTNAME);
+
+  // Start the WiFi connection
   WiFiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
   while (WiFiMulti.run() != WL_CONNECTED) {
     delay(WIFI_CONNECTION_DURATION);
